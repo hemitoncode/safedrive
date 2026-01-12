@@ -2,6 +2,11 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from scipy.spatial import distance as dist
+import serial
+import time 
+
+port = serial.Serial("/dev/cu.usbmodem1101", 9600)
+time.sleep(2)
 
 # Eye Aspect Ratio calculation
 def calculate_ear(eye_landmarks):
@@ -21,7 +26,9 @@ CONSEC_FRAMES = 20    # Number of consecutive frames eyes must be closed to trig
 
 # Counters
 frame_counter = 0
-alert_on = False
+
+# Boolean flags 
+already_active = False
 
 # MediaPipe Face Mesh landmark indices for eyes
 LEFT_EYE = [33, 160, 158, 133, 153, 144]
@@ -83,17 +90,20 @@ with mp_face_mesh.FaceMesh(
                 avg_ear = (left_ear + right_ear) / 2.0
                 
                 # Check if eyes are closed
-                if avg_ear < EAR_THRESHOLD:
-                    frame_counter += 1
-                    
-                    # If eyes closed for sufficient frames, trigger alert
-                    if frame_counter >= CONSEC_FRAMES:
-                        alert_on = True
-                        cv2.putText(image, "DROWSINESS ALERT!", (w - 300, 100),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-                else:
-                    frame_counter = 0
-                    alert_on = False
+                eyes_closed = avg_ear < EAR_THRESHOLD
+
+                # ON condition
+                if eyes_closed and not already_active and frame_counter >= CONSEC_FRAMES:
+                    port.write(b'1')        # Turn LED ON
+                    already_active = True
+
+                # OFF condition
+                if not eyes_closed and already_active:
+                    port.write(b'0')        # Turn LED OFF
+                    already_active = False
+
+                # Update frame counter
+                frame_counter = frame_counter + 1 if eyes_closed else 0
                 
                 # Draw eye contours
                 cv2.polylines(image, [left_eye_coords.astype(np.int32)], True, (0, 255, 0), 1)
