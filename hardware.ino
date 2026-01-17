@@ -5,18 +5,18 @@ const byte ROWS = 4;
 const byte COLS = 3;
 
 const char keys[ROWS][COLS] = {
-  {'1','2','3'},
-  {'4','5','6'},
-  {'7','8','9'},
-  {'*','0','#'}
+  { '1', '2', '3' },
+  { '4', '5', '6' },
+  { '7', '8', '9' },
+  { '*', '0', '#' }
 };
 
-const int led    = 13;
-const int fan    = 10;  
+const int led = 13;
+const int fan = 10;
 const int buzzer = 12;
 
-const byte rowPins[ROWS] = {9, 8, 7, 6};
-const byte colPins[COLS] = {5, 4, 3};
+const byte rowPins[ROWS] = { 9, 8, 7, 6 };
+const byte colPins[COLS] = { 5, 4, 3 };
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
@@ -25,13 +25,13 @@ String inputCode = "";
 int randomCode = 0;
 
 // System state
-bool alarmActive  = false;
+bool alarmActive = false;
 
 
 // ---------- LCD helpers ----------
 void clearLine(byte row) {
   lcd.setCursor(0, row);
-  lcd.print("                    "); // 20 spaces
+  lcd.print("                    ");  // 20 spaces
 }
 
 void printLine(byte row, const char* msg) {
@@ -61,12 +61,12 @@ void showPrompt() {
 void flashMessageRow2(const char* msg, unsigned long ms) {
   printLine(2, msg);
   delay(ms);
-  showPrompt(); // restore UI
+  showPrompt();  // restore UI
 }
 
 // ---------- Code generation ----------
 void generateNewCode() {
-  randomCode = random(1000, 10000); 
+  randomCode = random(1000, 10000);
   showRandomCode();
 }
 
@@ -139,15 +139,13 @@ void handleKeypad() {
 
   if (key == '*') {
     resetInput();
-    return;
   }
 
-  if (key == '#') {
+  else if (key == '#') {
     handleSubmit();
-    return;
   }
 
-  if (key >= '0' && key <= '9') {
+  else {
     handleDigit(key);
   }
 }
