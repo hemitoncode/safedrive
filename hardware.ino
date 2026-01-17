@@ -1,35 +1,37 @@
 #include <Keypad.h>
 #include <LiquidCrystal_I2C.h>
 
-char data = 0;
-
 const byte ROWS = 4;
 const byte COLS = 3;
 
-char keys[ROWS][COLS] = {
+const char keys[ROWS][COLS] = {
   {'1','2','3'},
   {'4','5','6'},
   {'7','8','9'},
   {'*','0','#'}
 };
 
-const int led = 2;
-const int fan = 11;
+const int led    = 13;
+const int fan    = 10;  
 const int buzzer = 12;
 
-byte rowPins[ROWS] = {9, 8, 7, 6};
-byte colPins[COLS] = {5, 4, 3};
+const byte rowPins[ROWS] = {9, 8, 7, 6};
+const byte colPins[COLS] = {5, 4, 3};
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 String inputCode = "";
-int randomCode;
+int randomCode = 0;
+
+// System state
+bool alarmActive  = false;
+
 
 // ---------- LCD helpers ----------
 void clearLine(byte row) {
   lcd.setCursor(0, row);
-  lcd.print("                    "); // 20 spaces for 20x4 would be better; keep 20 here
+  lcd.print("                    "); // 20 spaces
 }
 
 void printLine(byte row, const char* msg) {
@@ -59,25 +61,26 @@ void showPrompt() {
 void flashMessageRow2(const char* msg, unsigned long ms) {
   printLine(2, msg);
   delay(ms);
-  showPrompt();  // restore prompt after message
+  showPrompt(); // restore UI
 }
 
 // ---------- Code generation ----------
 void generateNewCode() {
-  randomCode = random(1000, 10000); // 1000–9999
+  randomCode = random(1000, 10000); 
   showRandomCode();
 }
 
-// ---------- Alarm control ----------
 void alarmOn() {
-  digitalWrite(fan, HIGH);
+  alarmActive = true;
+  analogWrite(fan, 255);
   digitalWrite(led, HIGH);
   tone(buzzer, 1000);
-  printLine(2, "ALERT!");
+  flashMessageRow2("Alarm!", 1000);
 }
 
 void alarmOff() {
-  digitalWrite(fan, LOW);
+  alarmActive = false;
+  analogWrite(fan, 0);
   digitalWrite(led, LOW);
   noTone(buzzer);
 }
@@ -89,54 +92,48 @@ void resetInput() {
 }
 
 void handleSubmit() {
-  if (data == 0) {
+  if (!alarmActive) {
     flashMessageRow2("System not active", 500);
+    resetInput();
     return;
   }
-  else if (inputCode.toInt() == randomCode) {
+
+  if (inputCode.length() != 4) {
+    flashMessageRow2("Enter 4 digits", 500);
+    resetInput();
+    return;
+  }
+
+  if (inputCode.toInt() == randomCode) {
     alarmOff();
     flashMessageRow2("Unlocked", 500);
-  } 
-  else {
+    generateNewCode();
+  } else {
     flashMessageRow2("Wrong code", 500);
   }
 
   resetInput();
-  generateNewCode();
 }
 
 void handleDigit(char key) {
-  if (inputCode.length() < 4) { // ensure it is only 4 digits
+  if (inputCode.length() < 4) {
     inputCode += key;
     showEnteredCode();
   }
 }
 
-// ---------- Setup / loop ----------
-void setup() {
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
+// ---------- Serial handling ----------
+void handleSerial() {
+  while (Serial.available() > 0) {
+    char data = Serial.read();
 
-  pinMode(led, OUTPUT);
-  pinMode(fan, OUTPUT);
-  pinMode(buzzer, OUTPUT);
-
-  Serial.begin(9600);
-
-  randomSeed(analogRead(A0));
-
-  generateNewCode();
-  showPrompt();
-  showEnteredCode();
+    if (data == '1') {
+      if (!alarmActive) alarmOn();
+    }
+  }
 }
 
-void loop() {
-  if (Serial.available() > 0) {
-    data = Serial.read();
-    if (data == '1') alarmOn();
-  }
-
+void handleKeypad() {
   char key = keypad.getKey();
   if (!key) return;
 
@@ -153,4 +150,25 @@ void loop() {
   if (key >= '0' && key <= '9') {
     handleDigit(key);
   }
+}
+
+// ---------- Setup / loop ----------
+void setup() {
+  lcd.init();
+  lcd.backlight();
+
+  pinMode(led, OUTPUT);
+  pinMode(fan, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  Serial.begin(9600);
+
+  generateNewCode();
+  showPrompt();
+  showEnteredCode();
+}
+
+void loop() {
+  handleSerial();
+  handleKeypad();
 }
